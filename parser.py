@@ -1,6 +1,6 @@
 from nodes import (NumberNode, StringNode, IdentNode, BinOpNode,
                    ConditionNode, LetNode, AssignNode, PrintNode,
-                   IfNode, WhileNode)
+                   IfNode, WhileNode, ForNode, FuncDefNode, FuncCallNode, ReturnNode)
 
 class Parser:
     def __init__(self, tokens):
@@ -36,10 +36,19 @@ class Parser:
             return self.if_statement()
         elif tok[0] == 'WHILE':
             return self.while_statement()
+        elif tok[0] == 'FOR':
+            return self.for_statement()
+        elif tok[0] == 'FUN':
+            return self.func_def()
+        elif tok[0] == 'RETURN':
+            return self.return_statement()
         elif tok[0] == 'IDENT':
-            return self.assign_statement()
-        else:
-            raise SyntaxError(f'Unexpected token: {tok}')
+            # could be assignment or function call
+            if self.pos + 1 < len(self.tokens) and self.tokens[self.pos + 1][0] == 'ASSIGN':
+                return self.assign_statement()
+            elif self.pos + 1 < len(self.tokens) and self.tokens[self.pos + 1][0] == 'LPAREN':
+                return self.func_call_statement()
+        raise SyntaxError(f'Unexpected token: {tok}')
 
     def let_statement(self):
         self.eat('LET')
@@ -67,7 +76,17 @@ class Parser:
         while self.current()[0] != 'RBRACE':
             body.append(self.statement())
         self.eat('RBRACE')
-        return IfNode(condition, body)
+
+        else_body = None
+        if self.current()[0] == 'ELSE':
+            self.eat('ELSE')
+            self.eat('LBRACE')
+            else_body = []
+            while self.current()[0] != 'RBRACE':
+                else_body.append(self.statement())
+            self.eat('RBRACE')
+
+        return IfNode(condition, body, else_body)
 
     def while_statement(self):
         self.eat('WHILE')
@@ -78,6 +97,53 @@ class Parser:
             body.append(self.statement())
         self.eat('RBRACE')
         return WhileNode(condition, body)
+
+    def for_statement(self):
+        self.eat('FOR')
+        var = self.eat('IDENT')[1]
+        self.eat('ASSIGN')
+        start = self.expression()
+        self.eat('TO')
+        end = self.expression()
+        self.eat('LBRACE')
+        body = []
+        while self.current()[0] != 'RBRACE':
+            body.append(self.statement())
+        self.eat('RBRACE')
+        return ForNode(var, start, end, body)
+
+    def func_def(self):
+        self.eat('FUN')
+        name = self.eat('IDENT')[1]
+        self.eat('LPAREN')
+        params = []
+        while self.current()[0] != 'RPAREN':
+            params.append(self.eat('IDENT')[1])
+            if self.current()[0] == 'COMMA':
+                self.eat('COMMA')
+        self.eat('RPAREN')
+        self.eat('LBRACE')
+        body = []
+        while self.current()[0] != 'RBRACE':
+            body.append(self.statement())
+        self.eat('RBRACE')
+        return FuncDefNode(name, params, body)
+
+    def func_call_statement(self):
+        name = self.eat('IDENT')[1]
+        self.eat('LPAREN')
+        args = []
+        while self.current()[0] != 'RPAREN':
+            args.append(self.expression())
+            if self.current()[0] == 'COMMA':
+                self.eat('COMMA')
+        self.eat('RPAREN')
+        return FuncCallNode(name, args)
+
+    def return_statement(self):
+        self.eat('RETURN')
+        value = self.expression()
+        return ReturnNode(value)
 
     def condition(self):
         left = self.expression()
@@ -118,6 +184,8 @@ class Parser:
             return StringNode(tok[1])
 
         elif tok[0] == 'IDENT':
+            if self.pos + 1 < len(self.tokens) and self.tokens[self.pos + 1][0] == 'LPAREN':
+                return self.func_call_statement()
             self.pos += 1
             return IdentNode(tok[1])
 

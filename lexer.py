@@ -16,7 +16,12 @@ class Lexer:
         while self.current_char() is not None:
             ch = self.current_char()
 
-            if ch in ' \t\n':
+            # comments — skip everything after # until end of line
+            if ch == '#':
+                while self.current_char() is not None and self.current_char() != '\n':
+                    self.advance()
+
+            elif ch in ' \t\n':
                 self.advance()
 
             elif ch.isdigit():
@@ -24,7 +29,15 @@ class Lexer:
                 while self.current_char() is not None and self.current_char().isdigit():
                     num += self.current_char()
                     self.advance()
-                self.tokens.append(('NUMBER', int(num)))
+                if self.current_char() == '.':
+                    num += '.'
+                    self.advance()
+                    while self.current_char() is not None and self.current_char().isdigit():
+                        num += self.current_char()
+                        self.advance()
+                    self.tokens.append(('NUMBER', float(num)))
+                else:
+                    self.tokens.append(('NUMBER', int(num)))
 
             elif ch == '"':
                 self.advance()
@@ -35,16 +48,18 @@ class Lexer:
                 self.advance()
                 self.tokens.append(('STRING', s))
 
-            elif ch.isalpha():
+            elif ch.isalpha() or ch == '_':
                 word = ''
-                while self.current_char() is not None and self.current_char().isalnum():
+                while self.current_char() is not None and (self.current_char().isalnum() or self.current_char() == '_'):
                     word += self.current_char()
                     self.advance()
-                keywords = ['let', 'if', 'while', 'print']
-                if word in keywords:
-                    self.tokens.append((word.upper(), word))
-                else:
-                    self.tokens.append(('IDENT', word))
+                keywords = {
+                    'let': 'LET', 'if': 'IF', 'else': 'ELSE',
+                    'while': 'WHILE', 'for': 'FOR', 'to': 'TO',
+                    'print': 'PRINT', 'fun': 'FUN', 'return': 'RETURN'
+                }
+                tok_type = keywords.get(word, 'IDENT')
+                self.tokens.append((tok_type, word))
 
             elif ch == '=':
                 self.advance()
@@ -106,6 +121,10 @@ class Lexer:
 
             elif ch == ')':
                 self.tokens.append(('RPAREN', ')'))
+                self.advance()
+
+            elif ch == ',':
+                self.tokens.append(('COMMA', ','))
                 self.advance()
 
             else:
